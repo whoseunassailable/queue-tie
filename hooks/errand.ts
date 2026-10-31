@@ -16,6 +16,12 @@ export const errandUsage = (command: string, kind: ErrandKind) =>
 export const errandReply = (kind: ErrandKind) =>
   kind === 'brew' ? 'Brewing now, outside the queue.' : 'Pouring an answer, outside the queue.'
 
+// Claude Code takes no prompt from a plugin that starts with /, as it would
+// run as a command: such words are not sent, and Rohan is told why.
+export const startsAsCommand = (text: string): boolean => text.startsWith('/')
+
+export const ERRAND_NOT_SENT = 'Not sent: words that start with / run as a command. Put a word before the / and send it again.'
+
 // The note the model reads just before the errand's words, never shown to
 // Rohan: the command's context, recorded after its output.
 export const errandNote = (kind: ErrandKind, current: Task | null): string => {

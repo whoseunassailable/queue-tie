@@ -27,7 +27,7 @@ A Claude Code mod that keeps one task in progress per project and the rest in a 
 | `/tea <question>` | Answers or explains, outside the queue: no check, no task, no files changed |
 | `/feature [<title> \| off]` | Shows, sets or clears the active feature new tasks are offered under |
 
-`/brew` (or **Brew now** in the menu) is for work you want right away without filing it, such as `/brew get the dev server running and tell me its URL`. The current task stays current, and its branch and conversation stay as they are. Claude is told to do the work and check that it worked, not just describe it. The commit and push guard still applies. Time spent goes to the project, as with a quick question. A fresh conversation that is due waits until the next turn, so the answer stays on screen.
+`/brew` (or **Brew now** in the menu) is for work you want right away without filing it, such as `/brew get the dev server running and tell me its URL`. The current task stays current, and its branch and conversation stay as they are. Claude is told to do the work and check that it worked, not just describe it. The commit and push guard still applies. Time spent goes to the project, as with a quick question. A fresh conversation that is due waits until the next turn, so the answer stays on screen. Words that start with `/` are not sent, since Claude Code would run them as a command: put a word before the `/`. A request that doesn't reach Claude is not lost: a toast says so, and it goes back in the prompt box if you haven't typed there since.
 
 ## Helpers
 

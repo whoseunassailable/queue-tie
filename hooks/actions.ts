@@ -2,7 +2,7 @@ import type { EngineInterface } from 'claude-code'
 
 import type { Difficulty, MenuView, ParentPick, Priority, ProjectRecord } from '../types'
 import { applyPending } from './effort'
-import { errandNote } from './errand'
+import { ERRAND_NOT_SENT, errandNote, startsAsCommand } from './errand'
 import type { ErrandKind } from './errand'
 import { guessParent } from './family'
 import {
@@ -241,16 +241,33 @@ export async function errandFor($: EngineInterface, kind: ErrandKind, text: stri
   return errandNote(kind, record === null ? null : currentTask(record.tasks))
 }
 
+// An errand's words that did not reach Claude go back in the prompt box as
+// the command that sends them, when nothing has been typed there since;
+// appended, so a box the mod can't read is never written over. Answers
+// whether they went back.
+export async function giveBack($: EngineInterface, command: string, text: string): Promise<boolean> {
+  const box = await $.prompt.read()
+  if (box.text !== '') return false
+
+  return (await $.prompt.fill({ text: `/${command} ${text}`, mode: 'append' })).isFilled
+}
+
 // The errand's words go to Claude as Rohan's once the caller is done (a
-// submit from a command's own hook would wait on it).
+// submit from a command's own hook would wait on it). Words that do not
+// enter, refused or dropped, are not lost: Rohan is told, and they go back.
 export function sendErrand($: EngineInterface, text: string, command: string) {
   portsOf($).later(async () => {
+    let failure: unknown = null
     try {
-      await $.prompt.submit({ text, asUser: true })
+      failure = (await $.prompt.submit({ text, asUser: true })).drop ?? null
     } catch (err) {
-      live.errand = null
-      debug($, `/${command} failed`, err)
+      failure = err
     }
+    if (failure === null) return
+    live.errand = null
+    debug($, `/${command} failed`, failure)
+    const isBack = await giveBack($, command, text).catch(() => false)
+    portsOf($).toast(`Queue-tea: /${command} did not reach Claude. ${isBack ? 'It is back in the prompt to send again.' : 'Send it again.'}`)
   })
 }
 
@@ -261,6 +278,12 @@ export async function brewNow($: EngineInterface, text: string) {
   const request = text.trim()
   if (request === '') return
   await closeMenu($)
+  if (startsAsCommand(request)) {
+    portsOf($).toast(`Queue-tea: ${ERRAND_NOT_SENT}`)
+    await giveBack($, 'brew', request)
+
+    return
+  }
   const note = await errandFor($, 'brew', request)
   await $.session.append({ message: { type: 'user', content: [{ type: 'text', text: note }] } })
   sendErrand($, request, 'brew')

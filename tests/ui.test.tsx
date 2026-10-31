@@ -47,6 +47,8 @@ const startSession = async (
     git?: Record<string, Run>
     reply?: string
     tokens?: number
+    // Set, a prompt the plugin submits does not enter, for this reason.
+    drop?: string
   } = {},
 ) => {
   const mem = memoryHost({
@@ -78,7 +80,7 @@ const startSession = async (
     seen.submits.push(e.text)
     seen.prompts.push({ text: e.text, origin: e.origin })
 
-    return { text: e.text }
+    return options.drop === undefined ? { text: e.text } : { drop: options.drop }
   })
   on('command.run', (_, e) => {
     if (e.command === 'clear') seen.clears += 1
@@ -630,6 +632,50 @@ test('a message typed after /brew is checked as before', async ($, on) => {
   expect(seen.prompts.map(p => p.text)).toEqual(['start the server'])
 })
 
+// Claude Code takes no prompt from a plugin that starts with /: it would run
+// as a command. Such a request used to be dropped after "Brewing now".
+test('/brew with words that start with / sends nothing, says why and puts the line back in the empty prompt box', async ($, on) => {
+  const fills = promptBox(on, '')
+  const { seen, clock } = await startSession($, on, { file: record() })
+
+  const answer = await $.command.run({ command: 'brew', args: ' /plan the workspace switcher ', ...COMMAND })
+  await clock.settle()
+
+  expect(answer.text).toBe('Not sent: words that start with / run as a command. Put a word before the / and send it again.')
+  expect(answer.context).toBeUndefined()
+  expect(seen.prompts).toEqual([])
+  expect(fills).toEqual([{ text: '/brew /plan the workspace switcher', mode: 'append' }])
+})
+
+test('a /brew request that does not enter is not lost: Rohan is told and it goes back in the empty prompt box', async ($, on) => {
+  const task = makeTask({ title: 'Now', state: 'current' })
+  const fills = promptBox(on, '')
+  const { seen, clock } = await startSession($, on, { file: record({ tasks: [task] }), drop: 'a Stop stands' })
+
+  const answer = await $.command.run({ command: 'brew', args: 'start the dev server', ...COMMAND })
+  await clock.settle()
+
+  expect(answer.text).toBe('Brewing now, outside the queue.')
+  expect(seen.logs).toEqual(['/brew failed: a Stop stands'])
+  expect(seen.toasts).toEqual(['Queue-tea: /brew did not reach Claude. It is back in the prompt to send again.'])
+  expect(fills).toEqual([{ text: '/brew start the dev server', mode: 'append' }])
+
+  // No errand is on its way: the same words typed next are the task's.
+  await $.turn.start({ text: 'start the dev server', turnId: 't1' })
+  expect(JSON.stringify(await $.tool.call({ tool: 'mcp__queue-tea__task_looks_done' }))).not.toContain('errand')
+})
+
+test('a /brew request that does not enter leaves a draft typed since alone, and says to send it again', async ($, on) => {
+  const fills = promptBox(on, 'something else')
+  const { seen, clock } = await startSession($, on, { file: record(), drop: 'a Stop stands' })
+
+  await $.command.run({ command: 'brew', args: 'start the dev server', ...COMMAND })
+  await clock.settle()
+
+  expect(seen.toasts).toEqual(['Queue-tea: /brew did not reach Claude. Send it again.'])
+  expect(fills).toEqual([])
+})
+
 // The held message's band: Cancel, and where a message sent on counts.
 
 // The prompt box beneath the plugin: what it holds, and what is put in it.
@@ -1062,6 +1108,26 @@ test('Brew now is the /brew errand: outside the queue, the task and branch kept,
   await $.turn.start({ text: 'run the tests', turnId: 't1' })
   expect(JSON.stringify(await $.tool.call({ tool: 'mcp__queue-tea__task_looks_done' }))).toContain('errand')
   expect(recordOf(mem).tasks.map(t => [t.title, t.state, t.branch])).toEqual([['Fix login', 'current', 'task/fix-login']])
+  await ui.unmount()
+})
+
+test('Brew now with words that start with / sends nothing, adds no note and puts the line back in the prompt box', async ($, on) => {
+  const rows = mock.session(on)
+  const fills = promptBox(on, '')
+  const { seen, clock } = await startSession($, on, { file: record() })
+  await $.command.run({ command: 'queue-tea', args: '', ...COMMAND })
+  const ui = await mountView($, 'terminal', 'brew')
+
+  await ui.input({ key: 'brew', text: '/plan the menu' })
+  await clock.settle()
+
+  expect(seen.closes).toEqual(['queue-tea'])
+  expect(rows.appended()).toEqual([])
+  expect(seen.prompts).toEqual([])
+  expect(seen.toasts).toEqual([
+    'Queue-tea: Not sent: words that start with / run as a command. Put a word before the / and send it again.',
+  ])
+  expect(fills).toEqual([{ text: '/brew /plan the menu', mode: 'append' }])
   await ui.unmount()
 })
 

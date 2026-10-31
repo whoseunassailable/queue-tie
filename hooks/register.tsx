@@ -7,6 +7,7 @@ import {
   errandFor,
   fileFromCommand,
   flush,
+  giveBack,
   loadRecord,
   MENU,
   menuClosed,
@@ -18,7 +19,7 @@ import {
   toggleMenu,
 } from './actions'
 import { commandRun } from './checkpoint'
-import { ERRANDS, errandReply, errandUsage, isErrandTurn } from './errand'
+import { ERRAND_NOT_SENT, ERRANDS, errandReply, errandUsage, isErrandTurn, startsAsCommand } from './errand'
 import type { ErrandKind } from './errand'
 import { afterTurn, commitWarning, onMessage, refreshDrift, refreshLines, shouldCheck, taskLooksDone, taskSection } from './flow'
 import { readHead } from './git'
@@ -145,10 +146,19 @@ async function checkTyped($: EngineInterface, text: string): Promise<'pass' | 'd
 }
 
 // /brew, /instant and /tea: the errand's note goes in the command's context,
-// and the words go to Claude as Rohan's own once the command is done.
+// and the words go to Claude as Rohan's own once the command is done. Words
+// that start with / are not sent; they go back in the prompt box once the
+// command is done with it.
 async function runErrand($: EngineInterface, kind: ErrandKind, command: string, args: string) {
   const text = args.trim()
   if (text === '') return { text: errandUsage(command, kind) }
+  if (startsAsCommand(text)) {
+    portsOf($).later(async () => {
+      await giveBack($, command, text)
+    })
+
+    return { text: ERRAND_NOT_SENT }
+  }
   const note = await errandFor($, kind, text)
   sendErrand($, text, command)
 

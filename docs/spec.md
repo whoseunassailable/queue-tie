@@ -133,6 +133,7 @@ An errand is work Rohan wants done now without filing it (`/brew`, `/instant`) o
 - **During its turn:** a `task_looks_done` call asks nothing. A fresh conversation past the size waits for the next turn; the handoff note at the allowance mark is still written.
 - **Time:** goes to the project, as after a quick question, until the next task message.
 - **Guards:** unchanged. Claude's commits and pushes are still refused.
+- **Words that don't reach Claude:** Claude Code takes no prompt from a plugin that starts with `/` (it would run as a command), so such words are not sent: the reply says why, adds no note, and the line goes back in the prompt box. Words refused or dropped for any other reason are not lost either: a toast says so, and the line goes back in the prompt box when nothing has been typed there since.
 
 ## Keeping usage down
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { errandNote, errandUsage, isErrandTurn } from '../hooks/errand'
+import { errandNote, errandUsage, isErrandTurn, startsAsCommand } from '../hooks/errand'
 import type { Errand } from '../hooks/errand'
 import { makeTask } from './helpers'
 
@@ -29,6 +29,13 @@ test('the /tea note asks for an answer that changes no files', () => {
 test('the usage line names what the command takes', () => {
   expect(errandUsage('brew', 'brew')).toBe('Write what you want after the command: /brew <request>')
   expect(errandUsage('queue-tea-tea', 'tea')).toBe('Write what you want after the command: /queue-tea-tea <question>')
+})
+
+test('only words that start with / would run as a command', () => {
+  expect(startsAsCommand('/plan the menu')).toBe(true)
+  expect(startsAsCommand('/')).toBe(true)
+  expect(startsAsCommand('run /plan on the menu')).toBe(false)
+  expect(startsAsCommand('start the dev server')).toBe(false)
 })
 
 test('only the main loop’s turn with the errand’s words is the errand', () => {
